@@ -113,7 +113,7 @@ if (!OPENAI_API_KEY) {
   );
 }
 
-    if (!LOVABLE_API_KEY) {
+    if (!OPENAI_API_KEY) {
       console.error('[CONFIG] API key not configured');
       return new Response(
         JSON.stringify({ error: 'Service temporarily unavailable' }),
