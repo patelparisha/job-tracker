@@ -149,24 +149,29 @@ export function DataSyncProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, setMasterResume, setJobDescriptions, setApplications, markAsSaved]);
 
-  // Save master resume to database
+  // Save master resume to database (UPSERT – creates row if missing)
   const saveMasterResume = useCallback(async () => {
     if (!user || isInitialLoadRef.current) return;
-
+  
     try {
       const { error } = await supabase
         .from('master_resumes')
-        .update({
-          header: masterResume.header as any,
-          summaries: masterResume.summaries as any,
-          education: masterResume.education as any,
-          experience: masterResume.experience as any,
-          projects: masterResume.projects as any,
-          skills: masterResume.skills as any,
-          leadership: masterResume.leadership as any,
-        })
-        .eq('user_id', user.id);
-
+        .upsert(
+          {
+            user_id: user.id, // REQUIRED so row can be created
+            header: masterResume.header as any,
+            summaries: masterResume.summaries as any,
+            education: masterResume.education as any,
+            experience: masterResume.experience as any,
+            projects: masterResume.projects as any,
+            skills: masterResume.skills as any,
+            leadership: masterResume.leadership as any,
+          },
+          {
+            onConflict: 'user_id', // ensures 1 row per user
+          }
+        );
+  
       if (error) throw error;
       markAsSaved();
     } catch (error) {
@@ -174,6 +179,7 @@ export function DataSyncProvider({ children }: { children: React.ReactNode }) {
       toast.error('Failed to save resume');
     }
   }, [user, masterResume, markAsSaved]);
+
 
   // Auto-save with debounce when master resume changes
   useEffect(() => {
