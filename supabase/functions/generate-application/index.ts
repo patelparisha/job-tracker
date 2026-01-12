@@ -308,8 +308,8 @@ serve(async (req) => {
       );
     }
 
-    const AI_API_KEY = Deno.env.get('AI_API_KEY');
-    if (!LOVABLE_API_KEY) {
+    const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
+    if (!OPENAI_API_KEY) {
       console.error('[CONFIG] API key not configured');
       return new Response(
         JSON.stringify({ error: 'Service temporarily unavailable' }),
@@ -427,7 +427,7 @@ OUTPUT FORMAT - Return valid JSON:
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${AI_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
