@@ -206,17 +206,24 @@ serve(async (req) => {
     }
 
     const { masterResume: rawResume, jobDescription: rawJob, settings: rawSettings } = body as Record<string, unknown>;
+
+    // Validate
     const masterResume = validateMasterResume(rawResume);
-    const jobDescription = validateJobDescription(rawJob);
+    const jobDescription = parseJobDescription(rawJob);  // <- make sure you import or define this
     const settings = validateSettings(rawSettings);
 
-    if (!masterResume || !jobDescription) return new Response(JSON.stringify({ error: "Resume and job description required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // Debug logs
+    console.log("[DEBUG] masterResume:", masterResume);
+    console.log("[DEBUG] jobDescription:", jobDescription);
 
-    // Debug logging
-    console.log("[DEBUG] Resume experience count:", masterResume.experience.length);
-    console.log("[DEBUG] Resume projects count:", masterResume.projects.length);
-    console.log("[DEBUG] Job description length:", jobDescription.rawText.length);
-
+    // Fail early if invalid
+    if (!masterResume || !jobDescription) {
+      return new Response(
+        JSON.stringify({ error: "Resume and job description are required" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    
     // Call AI
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) return new Response(JSON.stringify({ error: "Service unavailable" }), { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } });
