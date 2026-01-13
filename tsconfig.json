@@ -16,7 +16,5 @@
     "noUnusedLocals": false,
     "strictNullChecks": false
   },
-  "exclude": [
-    "supabase/functions"
-  ]
+  "exclude": ["supabase/functions"]
 }
