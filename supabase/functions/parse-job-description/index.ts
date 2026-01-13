@@ -1,8 +1,4 @@
-/* =========================
-   TYPES
-========================= */
-
-interface JobDescription {
+export interface JobDescription {
   company: string;
   role: string;
   location: string;
@@ -14,17 +10,10 @@ interface JobDescription {
   rawText: string;
 }
 
-/* =========================
-   CONSTANTS
-========================= */
-
-const MAX_STRING_LENGTH = 5000;
+const MAX_STRING_LENGTH = 10000;
 const MAX_ARRAY_LENGTH = 100;
 
-/* =========================
-   VALIDATION FUNCTIONS
-========================= */
-
+// Helper functions
 function validateString(value: unknown, maxLength = MAX_STRING_LENGTH): string {
   if (typeof value !== "string") return "";
   return value.trim().substring(0, maxLength);
@@ -32,16 +21,10 @@ function validateString(value: unknown, maxLength = MAX_STRING_LENGTH): string {
 
 function validateArray(value: unknown, maxLength = MAX_ARRAY_LENGTH): string[] {
   if (!Array.isArray(value)) return [];
-  return value
-    .slice(0, maxLength)
-    .map((v) => (typeof v === "string" ? v.trim().substring(0, MAX_STRING_LENGTH) : ""))
-    .filter(Boolean); // remove empty strings
+  return value.slice(0, maxLength).map(v => validateString(v, 200));
 }
 
-/* =========================
-   PARSE FUNCTION
-========================= */
-
+// Main parser
 export function parseJobDescription(data: unknown): JobDescription | null {
   if (typeof data !== "object" || data === null) return null;
   const job = data as Record<string, unknown>;
