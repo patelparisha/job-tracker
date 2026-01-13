@@ -11,6 +11,7 @@ function isAllowedOrigin(origin: string | null): boolean {
   if (!origin) return false;
   if (allowedOrigins.includes(origin)) return true;
   if (origin.match(/^https:\/\/[a-z0-9-]+\.lovableproject\.com$/)) return true;
+  if (origin.match(/^https:\/\/.*\.vercel\.app$/)) return true;
   if (origin.startsWith("http://localhost:")) return true;
   return false;
 }
