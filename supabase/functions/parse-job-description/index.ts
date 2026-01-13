@@ -5,13 +5,13 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const allowedOrigins = [
   "https://job-tracker-eight-omega.vercel.app",
+  "http://localhost:5173",
 ];
 
-function getCorsHeaders(origin: string | null) {
+function cors(origin: string | null) {
   return {
-    "Access-Control-Allow-Origin": origin && allowedOrigins.includes(origin)
-      ? origin
-      : "*",
+    "Access-Control-Allow-Origin":
+      origin && allowedOrigins.includes(origin) ? origin : "*",
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -20,41 +20,41 @@ function getCorsHeaders(origin: string | null) {
 
 /* -------------------- Validation -------------------- */
 
-function validateJobText(jobText: unknown) {
-  if (typeof jobText !== "string") {
+function validateJobText(value: unknown) {
+  if (typeof value !== "string") {
     return { valid: false, error: "Job description must be a string" };
   }
 
-  const trimmed = jobText.trim();
-  if (!trimmed) {
+  const text = value.trim();
+  if (!text) {
     return { valid: false, error: "Job description is required" };
   }
 
-  if (trimmed.length < 50) {
+  if (text.length < 50) {
     return { valid: false, error: "Job description too short" };
   }
 
-  return { valid: true, value: trimmed };
+  return { valid: true, value: text };
 }
 
 /* -------------------- Edge Function -------------------- */
 
 serve(async (req) => {
   const origin = req.headers.get("origin");
-  const corsHeaders = getCorsHeaders(origin);
+  const headers = cors(origin);
 
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers });
   }
 
   try {
-    /* ---------- Auth ---------- */
+    /* ---------- AUTH ---------- */
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Authentication required" }),
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers }
       );
     }
 
@@ -64,63 +64,53 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const { data: { user }, error: authError } =
-      await supabase.auth.getUser();
-
-    if (authError || !user) {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user) {
       return new Response(
         JSON.stringify({ error: "Invalid authentication" }),
-        { status: 401, headers: corsHeaders }
+        { status: 401, headers }
       );
     }
 
-    /* ---------- Body (SAFE PARSE) ---------- */
+    /* ---------- BODY ---------- */
 
-    let body: unknown;
+    let body: any;
     try {
       body = await req.json();
-      console.log("PAYLOAD KEYS:", Object.keys(payload));
     } catch {
       return new Response(
         JSON.stringify({ error: "Invalid JSON body" }),
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers }
       );
     }
 
-    if (
-      typeof body !== "object" ||
-      body === null ||
-      !("jobText" in body)
-    ) {
+    if (!body?.jobText) {
       return new Response(
-        JSON.stringify({
-          error: "Missing jobText field",
-          received: body,
-        }),
-        { status: 400, headers: corsHeaders }
+        JSON.stringify({ error: "Missing jobText field" }),
+        { status: 400, headers }
       );
     }
 
-    const validation = validateJobText((body as any).jobText);
-
+    const validation = validateJobText(body.jobText);
     if (!validation.valid) {
       return new Response(
         JSON.stringify({ error: validation.error }),
-        { status: 400, headers: corsHeaders }
+        { status: 400, headers }
       );
     }
 
-    /* ---------- OpenAI ---------- */
+    /* ---------- OPENAI ---------- */
 
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) {
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
-        { status: 503, headers: corsHeaders }
+        { status: 503, headers }
       );
     }
 
-    const systemPrompt = `
+    const prompt = `
+Extract structured job data.
 Return ONLY valid JSON:
 
 {
@@ -135,51 +125,53 @@ Return ONLY valid JSON:
 }
 `;
 
-    const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    const aiRes = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
-        temperature: 0.2,
-        messages: [
-          { role: "system", content: systemPrompt },
+        model: "gpt-4.1-mini",
+        input: [
+          { role: "system", content: prompt },
           { role: "user", content: validation.value },
         ],
+        temperature: 0.2,
       }),
     });
 
     const aiJson = await aiRes.json();
-    const content = aiJson?.choices?.[0]?.message?.content;
+    const text =
+      aiJson?.output_text ||
+      aiJson?.output?.[0]?.content?.[0]?.text;
 
-    if (!content) {
+    if (!text) {
       return new Response(
         JSON.stringify({ error: "Empty AI response" }),
-        { status: 500, headers: corsHeaders }
+        { status: 500, headers }
       );
     }
 
     let parsed;
     try {
-      parsed = JSON.parse(content);
+      parsed = JSON.parse(text);
     } catch {
       return new Response(
-        JSON.stringify({ error: "AI returned invalid JSON", raw: content }),
-        { status: 500, headers: corsHeaders }
+        JSON.stringify({ error: "AI returned invalid JSON", raw: text }),
+        { status: 500, headers }
       );
     }
 
     return new Response(
       JSON.stringify({ success: true, data: parsed }),
-      { headers: corsHeaders }
+      { headers }
     );
   } catch (err) {
-    console.error(err);
+    console.error("EDGE ERROR:", err);
     return new Response(
       JSON.stringify({ error: "Unexpected server error" }),
-      { status: 500, headers: corsHeaders }
+      { status: 500, headers }
     );
   }
 });

@@ -15,6 +15,7 @@ import { useResumeStore } from '@/stores/resumeStore';
 import { useDataSync } from '@/contexts/DataSyncContext';
 import type { JobDescription } from '@/types/resume';
 import { supabase } from "@/integrations/supabase/client";
+import { parseJobDescription } from "@/lib/api";
 
 
 function generateId() {
@@ -58,64 +59,37 @@ export default function JobDescriptions() {
   setIsParsing(true);
 
   try {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session?.access_token) {
-      throw new Error("You must be logged in to parse a job description.");
-    }
-
-    const res = await fetch(
-      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-job-description`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ jobText: newJob.rawText }),
-      }
-    );
-
-    const json = await res.json();
-
-    if (!res.ok || !json.success) {
-      throw new Error(json.error || "AI parsing failed");
-    }
-
-    const parsed = json.data;
+    const parsed = await parseJobDescription(newJob.rawText);
 
     setNewJob((prev) => ({
       ...prev,
-      company: parsed.company || prev.company,
-      role: parsed.role || prev.role,
-      location: parsed.location || prev.location,
-      salary: parsed.salary || prev.salary,
-      jobType: parsed.jobType || prev.jobType,
-      industry: parsed.industry || prev.industry,
+      company: parsed.company || "",
+      role: parsed.role || "",
+      location: parsed.location || "",
+      salary: parsed.salary || "",
+      jobType: parsed.jobType || "full-time",
+      industry: parsed.industry || "",
     }));
 
-    setSkillsInput(parsed.requiredSkills?.join(", ") || "");
-    setKeywordsInput(parsed.keywords?.join(", ") || "");
+    setSkillsInput(parsed.requiredSkills.join(", "));
+    setKeywordsInput(parsed.keywords.join(", "));
 
     toast({
       title: "Parsed successfully",
-      description: "Job details have been extracted. Review and edit as needed.",
+      description: "Fields have been auto-filled.",
     });
-  } catch (error) {
-    console.error("Parse error:", error);
+  } catch (err) {
+    console.error(err);
     toast({
       title: "Parsing failed",
       description:
-        error instanceof Error ? error.message : "Failed to parse job description",
+        err instanceof Error ? err.message : "AI parsing failed",
       variant: "destructive",
     });
   } finally {
     setIsParsing(false);
   }
 };
-
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
