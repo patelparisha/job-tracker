@@ -7,22 +7,14 @@ const allowedOrigins = [
   "https://job-tracker-eight-omega.vercel.app",
 ];
 
-function isAllowedOrigin(origin: string | null): boolean {
-  if (!origin) return false;
-  if (allowedOrigins.includes(origin)) return true;
-  if (origin.match(/^https:\/\/[a-z0-9-]+\.vercel\.app$/)) return true;
-  if (origin.startsWith("http://localhost:")) return true;
-  return false;
-}
-
-function getCorsHeaders(origin: string | null): Record<string, string> {
-  const allowedOrigin = isAllowedOrigin(origin) ? origin! : "*";
+function getCorsHeaders(origin: string | null) {
   return {
-    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Origin": origin && allowedOrigins.includes(origin)
+      ? origin
+      : "*",
     "Access-Control-Allow-Headers":
       "authorization, x-client-info, apikey, content-type",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Credentials": "true",
   };
 }
 
@@ -39,29 +31,10 @@ function validateJobText(jobText: unknown) {
   }
 
   if (trimmed.length < 50) {
-    return { valid: false, error: "Job description is too short" };
-  }
-
-  if (trimmed.length > 50000) {
-    return {
-      valid: false,
-      error: "Job description too long (max 50,000 characters)",
-    };
+    return { valid: false, error: "Job description too short" };
   }
 
   return { valid: true, value: trimmed };
-}
-
-/* -------------------- JSON Safety -------------------- */
-
-function safeParseJSON(text: string) {
-  try {
-    const parsed = JSON.parse(text);
-    if (typeof parsed !== "object" || parsed === null) return null;
-    return parsed;
-  } catch {
-    return null;
-  }
 }
 
 /* -------------------- Edge Function -------------------- */
@@ -81,10 +54,7 @@ serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Authentication required" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 401, headers: corsHeaders }
       );
     }
 
@@ -94,33 +64,48 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const {
-      data: { user },
-      error,
-    } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } =
+      await supabase.auth.getUser();
 
-    if (error || !user) {
+    if (authError || !user) {
       return new Response(
         JSON.stringify({ error: "Invalid authentication" }),
-        {
-          status: 401,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 401, headers: corsHeaders }
       );
     }
 
-    /* ---------- Body ---------- */
+    /* ---------- Body (SAFE PARSE) ---------- */
 
-    const body = await req.json().catch(() => null);
-    const validation = validateJobText(body?.jobText);
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON body" }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    if (
+      typeof body !== "object" ||
+      body === null ||
+      !("jobText" in body)
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: "Missing jobText field",
+          received: body,
+        }),
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const validation = validateJobText((body as any).jobText);
 
     if (!validation.valid) {
       return new Response(
         JSON.stringify({ error: validation.error }),
-        {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 400, headers: corsHeaders }
       );
     }
 
@@ -130,16 +115,12 @@ serve(async (req) => {
     if (!OPENAI_API_KEY) {
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
-        {
-          status: 503,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 503, headers: corsHeaders }
       );
     }
 
     const systemPrompt = `
-You are a job description parser.
-Return ONLY valid JSON in this exact shape:
+Return ONLY valid JSON:
 
 {
   "company": "",
@@ -151,11 +132,6 @@ Return ONLY valid JSON in this exact shape:
   "requiredSkills": [],
   "keywords": []
 }
-
-Rules:
-- No markdown
-- No explanations
-- Use empty strings or arrays if missing
 `;
 
     const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -174,55 +150,35 @@ Rules:
       }),
     });
 
-    if (!aiRes.ok) {
-      return new Response(
-        JSON.stringify({ error: "AI processing failed" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
     const aiJson = await aiRes.json();
     const content = aiJson?.choices?.[0]?.message?.content;
 
     if (!content) {
       return new Response(
         JSON.stringify({ error: "Empty AI response" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        { status: 500, headers: corsHeaders }
       );
     }
 
-    const parsed = safeParseJSON(content);
-
-    if (!parsed) {
+    let parsed;
+    try {
+      parsed = JSON.parse(content);
+    } catch {
       return new Response(
-        JSON.stringify({ error: "Invalid AI JSON output" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: "AI returned invalid JSON", raw: content }),
+        { status: 500, headers: corsHeaders }
       );
     }
 
     return new Response(
       JSON.stringify({ success: true, data: parsed }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { headers: corsHeaders }
     );
   } catch (err) {
-    console.error("[ERROR]", err);
+    console.error(err);
     return new Response(
       JSON.stringify({ error: "Unexpected server error" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: corsHeaders }
     );
   }
 });
