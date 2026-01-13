@@ -20,39 +20,6 @@ function generateId() {
   return crypto.randomUUID();
 }
 
-const parseWithAI = async () => {
-  if (!jobText.trim()) return;
-
-  const res = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-job-description`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ jobText }),
-    }
-  );
-
-  if (!res.ok) {
-    console.error("Parsing failed");
-    return;
-  }
-
-  const parsed = await res.json();
-
-  setCompany(parsed.company ?? "");
-  setRole(parsed.role ?? "");
-  setLocation(parsed.location ?? "");
-  setSalary(parsed.salary ?? "");
-  setJobType(parsed.jobType ?? "");
-  setIndustry(parsed.industry ?? "");
-  setRequiredSkills(parsed.requiredSkills?.join(", ") ?? "");
-  setKeywords(parsed.keywords?.join(", ") ?? "");
-};
-
-
 export default function JobDescriptions() {
   const { jobDescriptions, addJobDescription, deleteJobDescription } = useResumeStore();
   const { syncJobDescription } = useDataSync();
@@ -77,46 +44,66 @@ export default function JobDescriptions() {
   const [keywordsInput, setKeywordsInput] = useState('');
 
   const handleParseWithAI = async () => {
-    if (!newJob.rawText || newJob.rawText.trim().length < 50) {
-      toast({
-        title: 'Not enough text',
-        description: 'Please paste a complete job description to parse.',
-        variant: 'destructive',
-      });
-      return;
+  if (!newJob.rawText || newJob.rawText.trim().length < 50) {
+    toast({
+      title: 'Not enough text',
+      description: 'Please paste a complete job description to parse.',
+      variant: 'destructive',
+    });
+    return;
+  }
+
+  setIsParsing(true);
+
+  try {
+    const res = await fetch(
+      `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-job-description`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify({ jobText: newJob.rawText }),
+      }
+    );
+
+    if (!res.ok) {
+      throw new Error("AI parsing failed");
     }
 
-    setIsParsing(true);
-    try {
-      const parsed = await parseJobDescription(newJob.rawText);
-      
-      setNewJob({
-        ...newJob,
-        company: parsed.company || newJob.company,
-        role: parsed.role || newJob.role,
-        location: parsed.location || newJob.location,
-        salary: parsed.salary || newJob.salary,
-        jobType: parsed.jobType || newJob.jobType,
-        industry: parsed.industry || newJob.industry,
-      });
-      setSkillsInput(parsed.requiredSkills?.join(', ') || skillsInput);
-      setKeywordsInput(parsed.keywords?.join(', ') || keywordsInput);
+    const json = await res.json();
+    const parsed = json.data; // <-- important (edge function returns { success, data })
 
-      toast({
-        title: 'Parsed successfully',
-        description: 'Job details have been extracted. Review and edit as needed.',
-      });
-    } catch (error) {
-      console.error('Parse error:', error);
-      toast({
-        title: 'Parsing failed',
-        description: error instanceof Error ? error.message : 'Failed to parse job description',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsParsing(false);
-    }
-  };
+    setNewJob((prev) => ({
+      ...prev,
+      company: parsed.company || prev.company,
+      role: parsed.role || prev.role,
+      location: parsed.location || prev.location,
+      salary: parsed.salary || prev.salary,
+      jobType: parsed.jobType || prev.jobType,
+      industry: parsed.industry || prev.industry,
+    }));
+
+    setSkillsInput(parsed.requiredSkills?.join(", ") || "");
+    setKeywordsInput(parsed.keywords?.join(", ") || "");
+
+    toast({
+      title: 'Parsed successfully',
+      description: 'Job details have been extracted. Review and edit as needed.',
+    });
+  } catch (error) {
+    console.error('Parse error:', error);
+    toast({
+      title: 'Parsing failed',
+      description: error instanceof Error ? error.message : 'Failed to parse job description',
+      variant: 'destructive',
+    });
+  } finally {
+    setIsParsing(false);
+  }
+};
+
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
