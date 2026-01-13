@@ -209,7 +209,27 @@ serve(async (req) => {
 
     // Validate
     const masterResume = validateMasterResume(rawResume);
-    const jobDescription = parseJobDescription(rawJob);  // <- make sure you import or define this
+    const parseRes = await fetch(
+      `${process.env.VITE_SUPABASE_URL}/functions/v1/parse-job-description`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader!, // forward user auth
+        },
+        body: JSON.stringify(rawJob),
+      }
+    );
+
+    if (!parseRes.ok) {
+      return new Response(
+        JSON.stringify({ error: "Failed to parse job description" }),
+        { status: 400 }
+      );
+    }
+
+    const jobDescription = await parseRes.json();
+
     const settings = validateSettings(rawSettings);
 
     // Debug logs
@@ -228,18 +248,28 @@ serve(async (req) => {
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
     if (!OPENAI_API_KEY) return new Response(JSON.stringify({ error: "Service unavailable" }), { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: "You are an expert resume writer. Use ONLY master resume data." },
-          { role: "user", content: JSON.stringify({ masterResume, jobDescription, settings }) }
-        ],
-        temperature: 0.5,
-      }),
-    });
+    const aiResponse = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: "You are an expert resume writer. Use ONLY master resume data." },
+            {
+              role: "user",
+              content: JSON.stringify({ masterResume, jobDescription, settings }),
+            },
+          ],
+          temperature: 0.5,
+        }),
+      }
+    );
+
 
     const aiJson = await aiResponse.json();
     const content = aiJson.choices?.[0]?.message?.content || "";
