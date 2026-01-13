@@ -14,6 +14,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useResumeStore } from '@/stores/resumeStore';
 import { useDataSync } from '@/contexts/DataSyncContext';
 import type { JobDescription } from '@/types/resume';
+import { supabase } from "@/integrations/supabase/client";
+
 
 function generateId() {
   // Generate a proper UUID v4
@@ -46,9 +48,9 @@ export default function JobDescriptions() {
   const handleParseWithAI = async () => {
   if (!newJob.rawText || newJob.rawText.trim().length < 50) {
     toast({
-      title: 'Not enough text',
-      description: 'Please paste a complete job description to parse.',
-      variant: 'destructive',
+      title: "Not enough text",
+      description: "Please paste a complete job description to parse.",
+      variant: "destructive",
     });
     return;
   }
@@ -56,24 +58,33 @@ export default function JobDescriptions() {
   setIsParsing(true);
 
   try {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session?.access_token) {
+      throw new Error("You must be logged in to parse a job description.");
+    }
+
     const res = await fetch(
       `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-job-description`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+          Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ jobText: newJob.rawText }),
       }
     );
 
-    if (!res.ok) {
-      throw new Error("AI parsing failed");
+    const json = await res.json();
+
+    if (!res.ok || !json.success) {
+      throw new Error(json.error || "AI parsing failed");
     }
 
-    const json = await res.json();
-    const parsed = json.data; // <-- important (edge function returns { success, data })
+    const parsed = json.data;
 
     setNewJob((prev) => ({
       ...prev,
@@ -89,15 +100,16 @@ export default function JobDescriptions() {
     setKeywordsInput(parsed.keywords?.join(", ") || "");
 
     toast({
-      title: 'Parsed successfully',
-      description: 'Job details have been extracted. Review and edit as needed.',
+      title: "Parsed successfully",
+      description: "Job details have been extracted. Review and edit as needed.",
     });
   } catch (error) {
-    console.error('Parse error:', error);
+    console.error("Parse error:", error);
     toast({
-      title: 'Parsing failed',
-      description: error instanceof Error ? error.message : 'Failed to parse job description',
-      variant: 'destructive',
+      title: "Parsing failed",
+      description:
+        error instanceof Error ? error.message : "Failed to parse job description",
+      variant: "destructive",
     });
   } finally {
     setIsParsing(false);
