@@ -54,7 +54,7 @@ serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Authentication required" }),
-        { status: 401, headers }
+        { status: 200, headers }
       );
     }
 
@@ -68,7 +68,7 @@ serve(async (req) => {
     if (error || !data.user) {
       return new Response(
         JSON.stringify({ error: "Invalid authentication" }),
-        { status: 401, headers }
+        { status: 200, headers }
       );
     }
 
@@ -80,14 +80,14 @@ serve(async (req) => {
     } catch {
       return new Response(
         JSON.stringify({ error: "Invalid JSON body" }),
-        { status: 400, headers }
+        { status: 200, headers }
       );
     }
 
     if (!body?.jobText) {
       return new Response(
         JSON.stringify({ error: "Missing jobText field" }),
-        { status: 400, headers }
+        { status: 200, headers }
       );
     }
 
@@ -95,7 +95,7 @@ serve(async (req) => {
     if (!validation.valid) {
       return new Response(
         JSON.stringify({ error: validation.error }),
-        { status: 400, headers }
+        { status: 200, headers }
       );
     }
 
@@ -105,7 +105,7 @@ serve(async (req) => {
     if (!OPENAI_API_KEY) {
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
-        { status: 503, headers }
+        { status: 200, headers }
       );
     }
 
@@ -148,7 +148,7 @@ Schema:
     if (typeof text !== "string") {
       return new Response(
         JSON.stringify({ error: "AI returned no text", raw: aiJson }),
-        { status: 500, headers }
+        { status: 200, headers }
       );
     }
 
@@ -159,7 +159,7 @@ Schema:
     } catch {
       return new Response(
         JSON.stringify({ error: "AI returned invalid JSON", raw: text }),
-        { status: 500, headers }
+        { status: 200, headers }
       );
     }
 
@@ -171,7 +171,7 @@ Schema:
     console.error("EDGE ERROR:", err);
     return new Response(
       JSON.stringify({ error: "Unexpected server error" }),
-      { status: 500, headers }
+      { status: 200, headers }
     );
   }
 });

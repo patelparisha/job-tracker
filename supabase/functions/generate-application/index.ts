@@ -186,7 +186,7 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return new Response(
       JSON.stringify({ error: "Authentication required" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
@@ -196,13 +196,13 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return new Response(
       JSON.stringify({ error: "Invalid authentication" }),
-      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
     // Parse body
     let body: unknown;
     try { body = await req.json(); } catch {
-      return new Response(JSON.stringify({ error: "Invalid request body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return new Response(JSON.stringify({ error: "Invalid request body" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const { masterResume: rawResume, jobDescription: rawJob, settings: rawSettings } = body as Record<string, unknown>;
@@ -224,7 +224,7 @@ serve(async (req) => {
     if (!parseRes.ok) {
       return new Response(
         JSON.stringify({ error: "Failed to parse job description" }),
-        { status: 400 }
+        { status: 200 }
       );
     }
 
@@ -240,13 +240,13 @@ serve(async (req) => {
     if (!masterResume || !jobDescription) {
       return new Response(
         JSON.stringify({ error: "Resume and job description are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
     
     // Call AI
     const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) return new Response(JSON.stringify({ error: "Service unavailable" }), { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!OPENAI_API_KEY) return new Response(JSON.stringify({ error: "Service unavailable" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     const aiResponse = await fetch(
       "https://api.openai.com/v1/chat/completions",
@@ -283,6 +283,6 @@ serve(async (req) => {
     return new Response(JSON.stringify({ success: true, data: parsed }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
-    return new Response(JSON.stringify({ error: "Unexpected error occurred" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "Unexpected error occurred" }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
