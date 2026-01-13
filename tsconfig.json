@@ -14,3 +14,8 @@
     "strictNullChecks": false
   }
 }
+{
+  "exclude": [
+    "supabase/functions"
+  ]
+}
