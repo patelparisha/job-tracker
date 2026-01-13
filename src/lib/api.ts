@@ -41,9 +41,6 @@ export async function parseJobDescription(jobText: string): Promise<ParsedJobDes
     'parse-job-description',
     {
       body: { jobText },
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-      },
     }
   );
 
