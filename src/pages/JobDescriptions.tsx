@@ -13,13 +13,45 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useResumeStore } from '@/stores/resumeStore';
 import { useDataSync } from '@/contexts/DataSyncContext';
-import { parseJobDescription } from '@/lib/api';
 import type { JobDescription } from '@/types/resume';
 
 function generateId() {
   // Generate a proper UUID v4
   return crypto.randomUUID();
 }
+
+const parseWithAI = async () => {
+  if (!jobText.trim()) return;
+
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/parse-job-description`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ jobText }),
+    }
+  );
+
+  if (!res.ok) {
+    console.error("Parsing failed");
+    return;
+  }
+
+  const parsed = await res.json();
+
+  setCompany(parsed.company ?? "");
+  setRole(parsed.role ?? "");
+  setLocation(parsed.location ?? "");
+  setSalary(parsed.salary ?? "");
+  setJobType(parsed.jobType ?? "");
+  setIndustry(parsed.industry ?? "");
+  setRequiredSkills(parsed.requiredSkills?.join(", ") ?? "");
+  setKeywords(parsed.keywords?.join(", ") ?? "");
+};
+
 
 export default function JobDescriptions() {
   const { jobDescriptions, addJobDescription, deleteJobDescription } = useResumeStore();
