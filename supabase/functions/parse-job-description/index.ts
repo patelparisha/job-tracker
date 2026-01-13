@@ -110,18 +110,19 @@ serve(async (req) => {
     }
 
     const prompt = `
-Extract structured job data.
-Return ONLY valid JSON:
+You must respond with STRICT JSON ONLY.
+No markdown. No explanation. No trailing text.
 
+Schema:
 {
-  "company": "",
-  "role": "",
-  "location": "",
-  "salary": null,
-  "jobType": "full-time | part-time | internship | contract",
-  "industry": "",
-  "requiredSkills": [],
-  "keywords": []
+  "company": string,
+  "role": string,
+  "location": string,
+  "salary": string | null,
+  "jobType": "full-time" | "part-time" | "internship" | "contract",
+  "industry": string,
+  "requiredSkills": string[],
+  "keywords": string[]
 }
 `;
 
