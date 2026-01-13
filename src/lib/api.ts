@@ -29,9 +29,23 @@ interface GenerationSettings {
 }
 
 export async function parseJobDescription(jobText: string): Promise<ParsedJobDescription> {
-  const { data, error } = await supabase.functions.invoke('parse-job-description', {
-    body: { jobText },
-  });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("User not authenticated");
+  }
+
+  const { data, error } = await supabase.functions.invoke(
+    'parse-job-description',
+    {
+      body: { jobText },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }
+  );
 
   if (error) {
     console.error('Error parsing job description:', error);
@@ -50,9 +64,23 @@ export async function generateApplication(
   jobDescription: JobDescription,
   settings: GenerationSettings
 ): Promise<GeneratedContent> {
-  const { data, error } = await supabase.functions.invoke('generate-application', {
-    body: { masterResume, jobDescription, settings },
-  });
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.access_token) {
+    throw new Error("User not authenticated");
+  }
+
+  const { data, error } = await supabase.functions.invoke(
+    'generate-application',
+    {
+      body: { masterResume, jobDescription, settings },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    }
+  );
 
   if (error) {
     console.error('Error generating application:', error);
