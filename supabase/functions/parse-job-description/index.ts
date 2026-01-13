@@ -142,16 +142,15 @@ Return ONLY valid JSON:
     });
 
     const aiJson = await aiRes.json();
-    const text =
-      aiJson?.output_text ||
-      aiJson?.output?.[0]?.content?.[0]?.text;
+    const text = aiJson?.output?.[0]?.content?.[0]?.text;
 
-    if (!text) {
+    if (typeof text !== "string") {
       return new Response(
-        JSON.stringify({ error: "Empty AI response" }),
+        JSON.stringify({ error: "AI returned no text", raw: aiJson }),
         { status: 500, headers }
       );
     }
+
 
     let parsed;
     try {
