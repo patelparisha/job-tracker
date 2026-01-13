@@ -79,6 +79,7 @@ serve(async (req) => {
     let body: unknown;
     try {
       body = await req.json();
+      console.log("PAYLOAD KEYS:", Object.keys(payload));
     } catch {
       return new Response(
         JSON.stringify({ error: "Invalid JSON body" }),
